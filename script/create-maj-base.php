@@ -11,16 +11,9 @@ if(!defined('INC_FROM_DOLIBARR')) {
 }
 
 
-/* uncomment
-
-
 dol_include_once('/personalhomepage/class/personalhomepage.class.php');
 
 $PDOdb=new TPDOdb;
 
 $o=new TPersonalHomePage;
 $o->init_db_by_vars($PDOdb);
-
-$o=new TPersonalHomePageChild;
-$o->init_db_by_vars($PDOdb);
-*/

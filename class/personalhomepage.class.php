@@ -12,282 +12,65 @@ if (!class_exists('TObjetStd'))
 
 class TPersonalHomePage extends TObjetStd
 {
-	/**
-	 * Draft status
-	 */
-	const STATUS_DRAFT = 0;
-	/**
-	 * Validated status
-	 */
-	const STATUS_VALIDATED = 1;
-	/**
-	 * Refused status
-	 */
-	const STATUS_REFUSED = 3;
-	/**
-	 * Accepted status
-	 */
-	const STATUS_ACCEPTED = 4;
 	
-	public static $TStatus = array(
-		self::STATUS_DRAFT => 'Draft'
-		,self::STATUS_VALIDATED => 'Validate'
-		,self::STATUS_REFUSED => 'Refuse'
-		,self::STATUS_ACCEPTED => 'Accept'
-	);
-
-
 	public function __construct()
 	{
-		global $conf,$langs,$db;
+		global $conf;
 		
 		$this->set_table(MAIN_DB_PREFIX.'personalhomepage');
 		
-		$this->add_champs('ref', array('type' => 'string', 'length' => 80, 'index' => true));
-		$this->add_champs('label', array('type' => 'string'));
-		$this->add_champs('status', array('type' => 'integer'));
+		$this->add_champs('url', array('type' => 'text'));
+		$this->add_champs('element_type', array('type' => 'string', 'length' => '20'));
 		
-		$this->add_champs('entity,fk_user_author', array('type' => 'integer', 'index' => true));
-//		$this->add_champs('date_other,date_other_2', array('type' => 'date'));
-//		$this->add_champs('note', array('type' => 'text'));
+		$this->add_champs('entity,fk_element', array('type' => 'integer', 'index' => true));
 		
 		$this->_init_vars();
 		$this->start();
 		
-//		$this->setChild('TPersonalHomePageChild','fk_personalhomepage');
-		
-		if (!class_exists('GenericObject')) require_once DOL_DOCUMENT_ROOT.'/core/class/genericobject.class.php';
-		$this->generic = new GenericObject($db);
-		$this->generic->table_element = $this->get_table();
-		$this->generic->element = 'personalhomepage';
-		
-		$this->status = self::STATUS_DRAFT;
 		$this->entity = $conf->entity;
 	}
 
-	public function save(&$PDOdb, $addprov=false)
+	public static function getUrlFromUser(&$db, User &$user)
 	{
-		global $user;
+		$PDOdb = new TPDOdb;
+		$url = '';
 		
-		if (!$this->getId()) $this->fk_user_author = $user->id;
+		if (!class_exists('UserGroup')) require_once DOL_DOCUMENT_ROOT.'/user/class/usergroup.class.php';
 		
-		$res = parent::save($PDOdb);
-		
-		if ($addprov || !empty($this->is_clone))
+		$usergroup = new UserGroup($db);
+		$TGroup = $usergroup->listGroupsForUser($user->id);
+		foreach ($TGroup as &$usergroup)
 		{
-			$this->ref = '(PROV'.$this->getId().')';
-			
-			if (!empty($this->is_clone)) $this->status = self::STATUS_DRAFT;
-			
-			$wc = $this->withChild;
-			$this->withChild = false;
-			$res = parent::save($PDOdb);
-			$this->withChild = $wc;
+			$personalhomepage = new TPersonalHomePage;
+			if ($personalhomepage->loadByGroupId($PDOdb, $usergroup->id) > 0 && !empty($personalhomepage->url))
+			{
+				$url = $personalhomepage->url;
+				break;
+			}
 		}
 		
-		return $res;
+		return $url;
 	}
 	
-	public function load(&$PDOdb, $id, $loadChild = true)
+	public function loadByGroupId(&$PDOdb, $fk_group)
 	{
 		global $db;
 		
-		$res = parent::load($PDOdb, $id, $loadChild);
+		$sql = 'SELECT rowid FROM '.$this->get_table().' WHERE fk_element = '.$fk_group.' AND element_type = \'group\'';
+		$resql = $db->query($sql);
 		
-		$this->generic->id = $this->getId();
-		$this->generic->ref = $this->ref;
-		
-		if ($loadChild) $this->fetchObjectLinked();
-		
-		return $res;
-	}
-	
-	public function delete(&$PDOdb)
-	{
-		$this->generic->deleteObjectLinked();
-		
-		parent::delete($PDOdb);
-	}
-	
-	public function fetchObjectLinked()
-	{
-		$this->generic->fetchObjectLinked($this->getId());
-	}
-
-	public function setDraft(&$PDOdb)
-	{
-		if ($this->status == self::STATUS_VALIDATED)
+		if ($resql)
 		{
-			$this->status = self::STATUS_DRAFT;
-			$this->withChild = false;
-			
-			return parent::save($PDOdb);
+			if ($obj = $db->fetch_object($resql))
+			{
+				return $this->load($PDOdb, $obj->rowid);
+			}
+		}
+		else
+		{
+			dol_print_error($db);
 		}
 		
 		return 0;
 	}
-	
-	public function setValid(&$PDOdb)
-	{
-//		global $user;
-		
-		$this->ref = $this->getNumero();
-		$this->status = self::STATUS_VALIDATED;
-		
-		return parent::save($PDOdb);
-	}
-	
-	public function getNumero()
-	{
-		if (preg_match('/^[\(]?PROV/i', $this->ref) || empty($this->ref))
-		{
-			return $this->getNextNumero();
-		}
-		
-		return $this->ref;
-	}
-	
-	private function getNextNumero()
-	{
-		global $db,$conf;
-		
-		require_once DOL_DOCUMENT_ROOT.'/core/lib/functions2.lib.php';
-		
-		$mask = !empty($conf->global->MYMODULE_REF_MASK) ? $conf->global->MYMODULE_REF_MASK : 'MM{yy}{mm}-{0000}';
-		$numero = get_next_value($db, $mask, 'personalhomepage', 'ref');
-		
-		return $numero;
-	}
-	
-	public function setRefused(&$PDOdb)
-	{
-//		global $user;
-		
-		$this->status = self::STATUS_REFUSED;
-		$this->withChild = false;
-		
-		return parent::save($PDOdb);
-	}
-	
-	public function setAccepted(&$PDOdb)
-	{
-//		global $user;
-		
-		$this->status = self::STATUS_ACCEPTED;
-		$this->withChild = false;
-		
-		return parent::save($PDOdb);
-	}
-	
-	public function getNomUrl($withpicto=0, $get_params='')
-	{
-		global $langs;
-
-        $result='';
-        $label = '<u>' . $langs->trans("ShowPersonalHomePage") . '</u>';
-        if (! empty($this->ref)) $label.= '<br><b>'.$langs->trans('Ref').':</b> '.$this->ref;
-        
-        $linkclose = '" title="'.dol_escape_htmltag($label, 1).'" class="classfortooltip">';
-        $link = '<a href="'.dol_buildpath('/personalhomepage/card.php', 1).'?id='.$this->getId(). $get_params .$linkclose;
-       
-        $linkend='</a>';
-
-        $picto='generic';
-		
-        if ($withpicto) $result.=($link.img_object($label, $picto, 'class="classfortooltip"').$linkend);
-        if ($withpicto && $withpicto != 2) $result.=' ';
-		
-        $result.=$link.$this->ref.$linkend;
-		
-        return $result;
-	}
-	
-	public static function getStaticNomUrl($id, $withpicto=0)
-	{
-		global $PDOdb;
-		
-		if (empty($PDOdb)) $PDOdb = new TPDOdb;
-		
-		$object = new TPersonalHomePage;
-		$object->load($PDOdb, $id, false);
-		
-		return $object->getNomUrl($withpicto);
-	}
-	
-	public function getLibStatut($mode=0)
-    {
-        return self::LibStatut($this->status, $mode);
-    }
-	
-	public static function LibStatut($status, $mode)
-	{
-		global $langs;
-		$langs->load('personalhomepage@personalhomepage');
-
-		if ($status==self::STATUS_DRAFT) { $statustrans='statut0'; $keytrans='PersonalHomePageStatusDraft'; $shortkeytrans='Draft'; }
-		if ($status==self::STATUS_VALIDATED) { $statustrans='statut1'; $keytrans='PersonalHomePageStatusValidated'; $shortkeytrans='Validate'; }
-		if ($status==self::STATUS_REFUSED) { $statustrans='statut5'; $keytrans='PersonalHomePageStatusRefused'; $shortkeytrans='Refused'; }
-		if ($status==self::STATUS_ACCEPTED) { $statustrans='statut6'; $keytrans='PersonalHomePageStatusAccepted'; $shortkeytrans='Accepted'; }
-
-		
-		if ($mode == 0) return img_picto($langs->trans($keytrans), $statustrans);
-		elseif ($mode == 1) return img_picto($langs->trans($keytrans), $statustrans).' '.$langs->trans($keytrans);
-		elseif ($mode == 2) return $langs->trans($keytrans).' '.img_picto($langs->trans($keytrans), $statustrans);
-		elseif ($mode == 3) return img_picto($langs->trans($keytrans), $statustrans).' '.$langs->trans($shortkeytrans);
-		elseif ($mode == 4) return $langs->trans($shortkeytrans).' '.img_picto($langs->trans($keytrans), $statustrans);
-	}
-	
 }
-
-/**
- * Class needed if link exists with dolibarr object from element_element and call from $form->showLinkedObjectBlock()
- */
-class Personalhomepage extends TPersonalHomePage
-{
-	private $PDOdb;
-	
-	public function __construct()
-	{
-		parent::__construct();
-		
-		$this->PDOdb = new TPDOdb;
-	}
-	
-	function fetch($id)
-	{
-		return $this->load($this->PDOdb, $id);
-	}
-}
-
-/*
-class TPersonalHomePageChild extends TObjetStd
-{
-	public function __construct()
-	{
-		$this->set_table(MAIN_DB_PREFIX.'personalhomepage_child');
-		
-		$this->add_champs('fk_personalhomepage', array('type' => 'integer', 'index' => true));
-//		$this->add_champs('fk_user', array('type' => 'integer', 'index' => true)); // link n_n with user for example
-		
-		$this->_init_vars();
-		$this->start();
-		
-		$this->user = null;
-	}
-	
-	public function load(&$PDOdb, $id, $loadChild=true)
-	{
-		$res = parent::load($PDOdb, $id, $loadChild);
-		
-		return $res;
-	}
-	
-	public function loadBy(&$PDOdb, $value, $field, $annexe = false)
-	{
-		$res = parent::loadBy($PDOdb, $value, $field, $annexe);
-		
-		return $res;
-	}
-	
-}
-*/

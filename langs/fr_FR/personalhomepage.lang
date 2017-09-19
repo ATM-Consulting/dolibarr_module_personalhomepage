@@ -39,3 +39,7 @@ Modify=Modifier
 Reopen=Rouvrir
 ToClone=Cloner
 Delete=Supprimer
+
+
+#
+PersonalHomePageToolTip=<b>Exemple de valeur</b><br />Si l'accès à votre page d'index de projet est http://www.votresite.fr/<u>projet/index.php?mainmenu=project&leftmenu=</u><br />alors la valeur à saisir est <b>projet/index.php?mainmenu=project&leftmenu=</b>
