@@ -12,6 +12,7 @@ if(empty($user->rights->personalhomepage->write)) accessforbidden();
 
 $langs->load('personalhomepage@personalhomepage');
 $langs->load('admin');
+$langs->load('users');
 
 $action = GETPOST('action');
 $id = GETPOST('id', 'int');
